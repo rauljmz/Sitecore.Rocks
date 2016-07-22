@@ -19,61 +19,74 @@ namespace Sitecore.Rocks.Server.Pipelines.WriteItemHeader
 
         static SerializationStatus()
         {
-            Cache = new Cache(5000);
+            Cache = new Cache("SerializationStatus", 5000);
         }
 
         protected override void Process(WriteItemHeaderPipeline pipeline)
         {
             var status = 0;
-
-            var reference = new ItemReference(pipeline.Item);
-            var path = PathUtils.GetFilePath(reference.ToString());
-
-            if (FileUtil.FileExists(path))
+            try
             {
-                status = GetStatus(pipeline.Item, path);
+                var reference = new ItemReference(pipeline.Item);
+                var path = PathUtils.GetFilePath(reference.ToString());
+
+                if (FileUtil.FileExists(path))
+                {
+                    status = GetStatus(pipeline.Item, path);
+                }
+            }
+            catch
+            {
+                status = 3;
             }
 
             pipeline.Output.WriteAttributeString("serializationstatus", status.ToString(CultureInfo.InvariantCulture));
         }
 
         [CanBeNull]
-        private string GetRevision([NotNull] string fileName)
+        private string GetRevision([NotNull] string fileName)                                                                                                                                                    
         {
             Debug.ArgumentNotNull(fileName, nameof(fileName));
 
             var mode = 0;
             var count = 0;
 
-            using (var stream = new StreamReader(fileName))
+            try
             {
-                while (!stream.EndOfStream)
+                using (var stream = new StreamReader(fileName))
                 {
-                    var line = stream.ReadLine();
-                    if (string.IsNullOrEmpty(line))
+                    while (!stream.EndOfStream)
                     {
-                        continue;
-                    }
+                        var line = stream.ReadLine();
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            continue;
+                        }
 
-                    switch (mode)
-                    {
-                        case 0:
-                            if (line.StartsWith("field: {8CDC337E-A112-42FB-BBB4-4143751E123F}", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                mode = 1;
-                            }
+                        switch (mode)
+                        {
+                            case 0:
+                                if (line.StartsWith("field: {8CDC337E-A112-42FB-BBB4-4143751E123F}", StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    mode = 1;
+                                }
 
-                            break;
-                        case 1:
-                            count++;
-                            if (count == 4)
-                            {
-                                return line;
-                            }
+                                break;
+                            case 1:
+                                count++;
+                                if (count == 4)
+                                {
+                                    return line;
+                                }
 
-                            break;
+                                break;
+                        }
                     }
                 }
+            }
+            catch
+            {
+                return null;
             }
 
             return null;
